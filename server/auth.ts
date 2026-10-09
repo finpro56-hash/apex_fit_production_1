@@ -185,21 +185,31 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.locals.isGuest = false;
       return next();
     } catch (verifyError: any) {
+      const correlationId = (req.headers['x-request-id'] as string) || `req_${Math.random().toString(36).slice(2, 9)}`;
       const code = verifyError?.code || '';
+      let category = 'UNKNOWN_AUTH_ERROR';
+
       if (code === 'auth/id-token-expired') {
-        console.warn('[Auth Security] Expired Firebase ID token');
+        category = 'TOKEN_EXPIRED';
+        console.warn(`[Auth Security] [corr: ${correlationId}] [category: ${category}] [status: 401] Expired Firebase ID token`);
         return res.status(401).json({ error: 'Session expired. Please sign in again.' });
       }
       if (code === 'auth/invalid-id-token' || code === 'auth/argument-error' || code === 'auth/id-token-revoked') {
-        console.warn('[Auth Security] Malformed or invalid Firebase ID token');
+        category = 'INVALID_TOKEN';
+        console.warn(`[Auth Security] [corr: ${correlationId}] [category: ${category}] [status: 401] Malformed or invalid Firebase ID token (code: ${code})`);
         return res.status(401).json({ error: 'Invalid authentication token.' });
       }
 
-      console.error('[Auth Security] Firebase token verification failure:', verifyError instanceof Error ? verifyError.message : verifyError);
+      const errMsg = verifyError instanceof Error ? verifyError.message : String(verifyError);
+      category = errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ENOTFOUND') ? 'JWKS_NETWORK_ERROR' : 'VERIFICATION_FAILURE';
+
+      console.error(`[Auth Security] [corr: ${correlationId}] [category: ${category}] [status: 401] Firebase token verification failure:`, errMsg);
       return res.status(401).json({ error: 'Authentication verification failed. Please sign in again.' });
     }
   } catch (error) {
-    console.error('[Auth Security] Unexpected authentication error:', error instanceof Error ? error.message : error);
+    const correlationId = (req.headers['x-request-id'] as string) || `req_${Math.random().toString(36).slice(2, 9)}`;
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[Auth Security] [corr: ${correlationId}] [category: UNEXPECTED_AUTH_ERROR] [status: 401] Unexpected authentication error:`, errMsg);
     return res.status(401).json({ error: 'Authentication failed.' });
   }
 }
