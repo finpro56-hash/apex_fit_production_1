@@ -176,6 +176,7 @@ export function isQuotaError(error: any): boolean {
   if (error.error?.code === 429 || error.error?.status === 'RESOURCE_EXHAUSTED') return true;
   const msg = String(error.message || '').toUpperCase();
   const errorObjStr = error.error ? JSON.stringify(error.error).toUpperCase() : '';
+  const detailsStr = error.details ? JSON.stringify(error.details).toUpperCase() : '';
   return msg.includes('429') ||
          msg.includes('RESOURCE_EXHAUSTED') ||
          msg.includes('QUOTA') ||
@@ -183,7 +184,42 @@ export function isQuotaError(error: any): boolean {
          msg.includes('RATE_LIMIT') ||
          errorObjStr.includes('429') ||
          errorObjStr.includes('RESOURCE_EXHAUSTED') ||
-         errorObjStr.includes('QUOTA');
+         errorObjStr.includes('QUOTA') ||
+         detailsStr.includes('429') ||
+         detailsStr.includes('RESOURCE_EXHAUSTED') ||
+         detailsStr.includes('QUOTA');
+}
+
+export function isPerModelQuotaError(error: any): boolean {
+  if (!error) return false;
+  const msg = String(error.message || '').toUpperCase();
+  const errorObjStr = error.error ? JSON.stringify(error.error).toUpperCase() : '';
+  const detailsStr = error.details ? JSON.stringify(error.details).toUpperCase() : '';
+  const combined = `${msg} ${errorObjStr} ${detailsStr}`;
+
+  return combined.includes('PERMODEL') ||
+         combined.includes('GENERATE_CONTENT_FREE_TIER_REQUESTS') ||
+         (combined.includes('QUOTA EXCEEDED FOR METRIC') && combined.includes('MODEL'));
+}
+
+const modelCooldowns = new Map<string, number>();
+
+export function isModelOnCooldown(model: string): boolean {
+  const until = modelCooldowns.get(model);
+  if (!until) return false;
+  if (Date.now() > until) {
+    modelCooldowns.delete(model);
+    return false;
+  }
+  return true;
+}
+
+export function setModelCooldown(model: string, durationMs: number = 30 * 60 * 1000) {
+  modelCooldowns.set(model, Date.now() + durationMs);
+}
+
+export function clearModelCooldowns() {
+  modelCooldowns.clear();
 }
 
 async function generateWithFallback(contents: any, config?: any) {
@@ -204,12 +240,23 @@ async function generateWithFallback(contents: any, config?: any) {
   }
 
   const ai = createGeminiClient();
+  const allModels = envModels();
+  const availableModels = allModels.filter((m) => !isModelOnCooldown(m));
+  const modelsToTry = availableModels.length > 0 ? availableModels : allModels;
+
   let lastError: unknown = null;
-  for (const model of envModels()) {
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
     try {
       return await ai.models.generateContent({ model, contents, config });
     } catch (error: any) {
       lastError = error;
+      const hasAnotherModel = i < modelsToTry.length - 1;
+      if (isPerModelQuotaError(error) && hasAnotherModel) {
+        setModelCooldown(model);
+        console.warn(`[Gemini Model] ${model} daily free-tier quota exhausted, failing over to ${modelsToTry[i + 1]}...`);
+        continue;
+      }
       if (isQuotaError(error)) {
         console.warn(`[Gemini Model] ${model} failed (quota exhausted):`, error instanceof Error ? error.message : error);
         throw error;
