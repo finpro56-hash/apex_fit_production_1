@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User body metrics and profile info",
+      "type": "object",
+      "properties": {
+        "heightCm": { "type": "number", "description": "Height in cm" },
+        "weightKg": { "type": "number", "description": "Weight in kg" },
+        "age": { "type": "number", "description": "Age in years" },
+        "activityLevel": { "type": "string", "description": "Activity level descriptor" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["heightCm", "weightKg", "age", "activityLevel"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Daily nutrition and calorie targets",
+      "type": "object",
+      "properties": {
+        "calorieTarget": { "type": "number" },
+        "proteinTarget": { "type": "number" },
+        "carbTarget": { "type": "number" },
+        "fatTarget": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["calorieTarget", "proteinTarget", "carbTarget", "fatTarget"]
+    },
+    "FoodLog": {
+      "title": "FoodLog",
+      "description": "Logged food item or meal",
+      "type": "object",
+      "properties": {
+        "mealType": { "type": "string" },
+        "foodName": { "type": "string", "maxLength": 200 },
+        "quantity": { "type": "number" },
+        "portion": { "type": "string", "maxLength": 100 },
+        "calories": { "type": "number" },
+        "proteinG": { "type": "number" },
+        "carbsG": { "type": "number" },
+        "fatG": { "type": "number" },
+        "source": { "type": "string" },
+        "estimatedByAI": { "type": "boolean" },
+        "confidence": { "type": "number" },
+        "userConfirmed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["mealType", "foodName", "calories", "source", "userConfirmed"]
+    },
+    "WorkoutPlan": {
+      "title": "WorkoutPlan",
+      "description": "Workout routine template",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "exercises": { "type": "array", "description": "List of exercises in plan" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "exercises"]
+    },
+    "WorkoutSession": {
+      "title": "WorkoutSession",
+      "description": "Completed or active workout session",
+      "type": "object",
+      "properties": {
+        "planTitle": { "type": "string" },
+        "date": { "type": "string" },
+        "exercises": { "type": "array" },
+        "completed": { "type": "boolean" },
+        "durationMinutes": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["planTitle", "date", "exercises", "completed"]
+    },
+    "Progress": {
+      "title": "Progress",
+      "description": "Body weight and progression tracking",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "weightKg": { "type": "number" },
+        "bodyFatPercentage": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "weightKg"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}/profile/{profileId}": {
+      "schema": "Profile",
+      "description": "User profile document"
+    },
+    "/users/{uid}/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "User nutrition goals document"
+    },
+    "/users/{uid}/foodLogs/{foodLogId}": {
+      "schema": "FoodLog",
+      "description": "User food logs"
+    },
+    "/users/{uid}/workoutPlans/{planId}": {
+      "schema": "WorkoutPlan",
+      "description": "User workout plans"
+    },
+    "/users/{uid}/workoutSessions/{sessionId}": {
+      "schema": "WorkoutSession",
+      "description": "User workout sessions"
+    },
+    "/users/{uid}/progress/{progressId}": {
+      "schema": "Progress",
+      "description": "User weight & progress entries"
+    }
+  }
+}

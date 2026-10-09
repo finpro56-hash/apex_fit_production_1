@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function validDate(value) {
+      return value is string && value.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function validNonNegative(value, maxValue) {
+      return value is number && value >= 0 && value <= maxValue;
+    }
+
+    match /users/{uid}/profile/{profileId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && profileId == 'main'
+        && request.resource.data.keys().hasOnly(['heightCm', 'weightKg', 'age', 'sex', 'activityLevel', 'updatedAt'])
+        && request.resource.data.heightCm is number
+        && request.resource.data.heightCm >= 50 && request.resource.data.heightCm <= 300
+        && request.resource.data.weightKg is number
+        && request.resource.data.weightKg >= 20 && request.resource.data.weightKg <= 500
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18 && request.resource.data.age <= 120
+        && request.resource.data.sex in ['male', 'female', 'unspecified']
+        && request.resource.data.activityLevel in ['sedentary', 'light', 'moderate', 'very', 'extra']
+        && request.resource.data.updatedAt is string;
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/goals/{goalId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && goalId == 'main'
+        && request.resource.data.keys().hasOnly(['calorieTarget', 'proteinTarget', 'carbTarget', 'fatTarget', 'updatedAt'])
+        && validNonNegative(request.resource.data.calorieTarget, 10000)
+        && request.resource.data.calorieTarget >= 500
+        && validNonNegative(request.resource.data.proteinTarget, 1000)
+        && validNonNegative(request.resource.data.carbTarget, 2000)
+        && validNonNegative(request.resource.data.fatTarget, 1000)
+        && request.resource.data.updatedAt is string;
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/foodLogs/{foodLogId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'date', 'mealType', 'foodName', 'quantity', 'portion', 'calories',
+          'proteinG', 'carbsG', 'fatG', 'source', 'estimatedByAI', 'confidence',
+          'userConfirmed', 'createdAt'
+        ])
+        && validDate(request.resource.data.date)
+        && request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']
+        && request.resource.data.foodName is string
+        && request.resource.data.foodName.size() > 0 && request.resource.data.foodName.size() <= 200
+        && (!('quantity' in request.resource.data) || (request.resource.data.quantity is number && request.resource.data.quantity > 0 && request.resource.data.quantity <= 10000))
+        && (!('portion' in request.resource.data) || (request.resource.data.portion is string && request.resource.data.portion.size() <= 100))
+        && validNonNegative(request.resource.data.calories, 10000)
+        && validNonNegative(request.resource.data.proteinG, 1000)
+        && validNonNegative(request.resource.data.carbsG, 2000)
+        && validNonNegative(request.resource.data.fatG, 1000)
+        && request.resource.data.source in ['manual', 'photo', 'voice', 'text']
+        && request.resource.data.userConfirmed is bool
+        && (!('estimatedByAI' in request.resource.data) || request.resource.data.estimatedByAI is bool)
+        && (!('confidence' in request.resource.data) || (request.resource.data.confidence is number && request.resource.data.confidence >= 0 && request.resource.data.confidence <= 1))
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    match /users/{uid}/workoutPlans/{planId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['title', 'description', 'exercises', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 500
+        && request.resource.data.exercises is list
+        && request.resource.data.exercises.size() > 0 && request.resource.data.exercises.size() <= 50
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    match /users/{uid}/workoutSessions/{sessionId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['planTitle', 'date', 'exercises', 'completed', 'durationMinutes', 'createdAt'])
+        && request.resource.data.planTitle is string
+        && request.resource.data.planTitle.size() > 0 && request.resource.data.planTitle.size() <= 100
+        && validDate(request.resource.data.date)
+        && request.resource.data.exercises is list
+        && request.resource.data.exercises.size() > 0 && request.resource.data.exercises.size() <= 50
+        && request.resource.data.completed is bool
+        && request.resource.data.durationMinutes is int
+        && request.resource.data.durationMinutes >= 0 && request.resource.data.durationMinutes <= 1440
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    match /users/{uid}/progress/{progressId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['date', 'weightKg', 'bodyFatPercentage', 'notes', 'createdAt'])
+        && validDate(request.resource.data.date)
+        && request.resource.data.weightKg is number
+        && request.resource.data.weightKg >= 20 && request.resource.data.weightKg <= 500
+        && (!('bodyFatPercentage' in request.resource.data) || request.resource.data.bodyFatPercentage == null || (request.resource.data.bodyFatPercentage is number && request.resource.data.bodyFatPercentage >= 1 && request.resource.data.bodyFatPercentage <= 70))
+        && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 500))
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
