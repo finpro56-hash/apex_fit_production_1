@@ -76,7 +76,7 @@ export function AiCoachView({ foodLogs, sessions, goals, profile }: AiCoachViewP
       const errMsg: ChatMessage = {
         id: `err_${Date.now()}`,
         role: 'assistant',
-        content: 'Sorry, I encountered an error connecting to the AI coach. Please try again.',
+        content: err.message || 'Sorry, I encountered an error connecting to the AI coach. Please try again.',
         createdAt: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);

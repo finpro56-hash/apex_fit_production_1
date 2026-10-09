@@ -21,7 +21,7 @@ import {
 dotenv.config();
 
 const DEFAULT_MODEL = 'gemini-3.8-flash';
-const DEFAULT_FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
+const DEFAULT_FALLBACK_MODELS = ['gemini-3.1-flash-lite'];
 
 const FoodAnalysisResponseSchema = z.object({
   meal: z.string().min(1).max(30),
@@ -171,9 +171,19 @@ function parseJsonResponse<T>(text: string | undefined, schema: z.ZodType<T>): T
 
 export function isQuotaError(error: any): boolean {
   if (!error) return false;
-  if (error.status === 429) return true;
+  if (error.status === 429 || error.statusCode === 429 || error.code === 429) return true;
+  if (error.status === 'RESOURCE_EXHAUSTED' || error.code === 'RESOURCE_EXHAUSTED') return true;
+  if (error.error?.code === 429 || error.error?.status === 'RESOURCE_EXHAUSTED') return true;
   const msg = String(error.message || '').toUpperCase();
-  return msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('QUOTA') || msg.includes('RATE LIMIT');
+  const errorObjStr = error.error ? JSON.stringify(error.error).toUpperCase() : '';
+  return msg.includes('429') ||
+         msg.includes('RESOURCE_EXHAUSTED') ||
+         msg.includes('QUOTA') ||
+         msg.includes('RATE LIMIT') ||
+         msg.includes('RATE_LIMIT') ||
+         errorObjStr.includes('429') ||
+         errorObjStr.includes('RESOURCE_EXHAUSTED') ||
+         errorObjStr.includes('QUOTA');
 }
 
 async function generateWithFallback(contents: any, config?: any) {
@@ -200,11 +210,11 @@ async function generateWithFallback(contents: any, config?: any) {
       return await ai.models.generateContent({ model, contents, config });
     } catch (error: any) {
       lastError = error;
-      console.warn(`[Gemini Model] ${model} failed:`, error instanceof Error ? error.message : error);
       if (isQuotaError(error)) {
-        // Quota is project-wide; do not spin through multiple fallbacks
-        break;
+        console.warn(`[Gemini Model] ${model} failed (quota exhausted):`, error instanceof Error ? error.message : error);
+        throw error;
       }
+      console.warn(`[Gemini Model] ${model} failed (error), checking fallback...:`, error instanceof Error ? error.message : error);
     }
   }
   throw lastError instanceof Error ? lastError : new Error('All configured Gemini models failed');
@@ -372,16 +382,22 @@ function fallbackEstimate(foodName: string): { calories: number; protein_g: numb
   if (lower.includes('apple')) return { calories: 95, protein_g: 0.5, carbs_g: 25, fat_g: 0.3 };
   if (lower.includes('banana')) return { calories: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.3 };
   if (lower.includes('egg')) return { calories: 78, protein_g: 6, carbs_g: 0.6, fat_g: 5 };
-  if (lower.includes('chicken')) return { calories: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 };
+  if (lower.includes('chicken') || lower.includes('turkey')) return { calories: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 };
   if (lower.includes('rice')) return { calories: 206, protein_g: 4.3, carbs_g: 45, fat_g: 0.4 };
-  if (lower.includes('oat')) return { calories: 150, protein_g: 5, carbs_g: 27, fat_g: 2.5 };
-  if (lower.includes('bread')) return { calories: 80, protein_g: 3, carbs_g: 14, fat_g: 1 };
-  if (lower.includes('salmon') || lower.includes('fish')) return { calories: 208, protein_g: 22, carbs_g: 0, fat_g: 13 };
-  if (lower.includes('beef') || lower.includes('steak')) return { calories: 250, protein_g: 26, carbs_g: 0, fat_g: 15 };
+  if (lower.includes('oat') || lower.includes('oatmeal')) return { calories: 150, protein_g: 5, carbs_g: 27, fat_g: 2.5 };
+  if (lower.includes('bread') || lower.includes('toast')) return { calories: 80, protein_g: 3, carbs_g: 14, fat_g: 1 };
+  if (lower.includes('salmon') || lower.includes('fish') || lower.includes('tuna')) return { calories: 180, protein_g: 25, carbs_g: 0, fat_g: 8 };
+  if (lower.includes('beef') || lower.includes('steak') || lower.includes('burger')) return { calories: 250, protein_g: 26, carbs_g: 0, fat_g: 15 };
+  if (lower.includes('pasta') || lower.includes('spaghetti') || lower.includes('noodle')) return { calories: 220, protein_g: 8, carbs_g: 43, fat_g: 1.3 };
+  if (lower.includes('potato') || lower.includes('sweet potato')) return { calories: 130, protein_g: 3, carbs_g: 30, fat_g: 0.2 };
+  if (lower.includes('avocado')) return { calories: 160, protein_g: 2, carbs_g: 8.5, fat_g: 14.7 };
+  if (lower.includes('peanut butter') || lower.includes('nut butter')) return { calories: 190, protein_g: 8, carbs_g: 7, fat_g: 16 };
+  if (lower.includes('cheese')) return { calories: 110, protein_g: 7, carbs_g: 1, fat_g: 9 };
   if (lower.includes('salad')) return { calories: 120, protein_g: 3, carbs_g: 10, fat_g: 7 };
   if (lower.includes('milk')) return { calories: 122, protein_g: 8, carbs_g: 12, fat_g: 4.8 };
   if (lower.includes('yogurt')) return { calories: 130, protein_g: 12, carbs_g: 15, fat_g: 2 };
-  if (lower.includes('protein shake') || lower.includes('whey')) return { calories: 140, protein_g: 25, carbs_g: 3, fat_g: 2 };
+  if (lower.includes('protein shake') || lower.includes('whey') || lower.includes('protein bar')) return { calories: 150, protein_g: 25, carbs_g: 5, fat_g: 2 };
+  if (lower.includes('bean') || lower.includes('lentil')) return { calories: 140, protein_g: 9, carbs_g: 25, fat_g: 0.5 };
   return { calories: 150, protein_g: 5, carbs_g: 20, fat_g: 5 };
 }
 
