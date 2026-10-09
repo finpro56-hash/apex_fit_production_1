@@ -46,7 +46,14 @@ export function ProfileModal({ isOpen, onClose, profile, goals, onSave, required
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData }),
       });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text.slice(0, 120) || `Server returned status ${res.status}`);
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Failed to calculate maintenance calories');
       }
@@ -78,7 +85,14 @@ export function ProfileModal({ isOpen, onClose, profile, goals, onSave, required
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, calorieTarget: goalData.calorieTarget }),
       });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text.slice(0, 120) || `Server returned status ${res.status}`);
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Failed to calculate macros');
       }

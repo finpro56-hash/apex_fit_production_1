@@ -58,7 +58,14 @@ export function AiCoachView({ foodLogs, sessions, goals, profile }: AiCoachViewP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMsgText, context }),
       });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text.slice(0, 120) || `Server returned status ${res.status}`);
+      }
 
       if (res.ok) {
         const aiMsg: ChatMessage = {
